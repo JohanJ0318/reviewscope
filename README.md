@@ -33,22 +33,36 @@ flowchart LR
 
 ## Results
 
-> **These numbers come from the synthetic smoke dataset** (20k generated reviews,
-> 8% label noise, 60 games), with a 3-layer MiniLM, on a laptop CPU. They show the
-> pipeline works end to end. They are not claims about real Steam reviews.
-> Re-run on the real data (below) and replace this table.
+Measured on the real [Kaggle Steam reviews](https://www.kaggle.com/datasets/andrewmvd/steam-reviews)
+dump, on a laptop CPU with no GPU. That budget is why training used a 30k-review
+sample rather than the 3.4M available, for one epoch.
 
 | Stage | Metric | Value |
 |---|---|---|
-| Classifier, test set = unseen games | LoRA (r=8, 0.22% of params trained) | **88.7%** accuracy |
-| | head only (encoder frozen) | 73.8% |
-| | majority class | 57.9% |
-| Calibration | ECE, LoRA / head only | **0.020** / 0.210 |
-| ONNX parity | max abs logit diff vs PyTorch | 7e-7 |
-| ONNX latency, batch 1, seq 64 | PyTorch / ORT fp32 / ORT int8 | 20.7 / 8.1 / **5.6 ms** |
-| int8 quantisation | size, accuracy | 70 → **18 MB**, 88.6% → 88.7% |
-| FAISS, 19k vectors | IVF-PQ vs exact: size, recall@10 | 29.4 → **2.3 MB**, 0.92 |
+| Spark ETL | raw rows → kept after cleaning and dedupe | 6,417,106 → **4,400,530** |
+| | split by game: train / val / test | 3.43M / 475k / 493k reviews; 7,299 / 917 / 874 games |
+| | same job on Databricks serverless (Free Edition) | identical counts, 324 s |
+| Classifier, DistilBERT, 30k train rows, test = 10k reviews of 55 unseen games | LoRA (r=8, 1.1% of params trained) | **90.8%** accuracy, AUC **0.936**, macro-F1 **0.830** |
+| | head only (encoder frozen) | 87.9%, AUC 0.896, macro-F1 0.758 |
+| | always "recommended" | 82.5%, macro-F1 0.45 |
+| Calibration | ECE, LoRA / head only | 0.007 / 0.006 |
+| | per-game positive rate, mean abs error, LoRA / head | **0.046** / 0.060 |
+| ONNX parity | max abs logit diff vs PyTorch | 3e-6 |
+| ONNX latency, batch 1, seq 128 | PyTorch / ORT fp32 / ORT int8 (p50) | 72.5 / 61.1 / **36.7 ms** |
+| int8 quantisation | size, accuracy on 2k test reviews | 268 → **67 MB**, 91.3% → 90.6% |
+| FAISS, 300k reviews, MiniLM-L6 384-d | IVF-PQ vs raw float32: size, recall@10 (nprobe 16) | 461 → **21 MB**, 0.59 |
 | Serving image | torch installed | **no** (checked in CI) |
+
+Because 82% of reviews are positive, accuracy flatters both models. AUC and
+macro-F1 show the gap more clearly. Both models are well calibrated overall.
+The per-game panel shows LoRA tracks each game's real approval rate more closely.
+
+The 0.59 recall is the cost of heavy compression: 48-byte PQ codes, and 16 of 2,190
+cells probed per query. Raising `--nprobe` or the PQ code size buys recall back at
+the cost of speed or memory. It is reported as measured, not tuned.
+
+CI reruns everything except Databricks and Bedrock on a small synthetic dataset
+(`scripts/smoke.sh`), to check that the pipeline still works.
 
 ![Calibration](docs/img/calibration.png)
 ![Latency](docs/img/latency.png)
@@ -100,13 +114,21 @@ paths and the Hugging Face cache can exceed the 260-character path limit.
 
 1. Download the [Steam Reviews dataset](https://www.kaggle.com/datasets/andrewmvd/steam-reviews)
    (`dataset.csv`, ~6.4M rows) into `data/raw/`.
+   The dataset is licensed CC BY-NC 4.0, so this repo does not include it or
+   anything derived from it.
 2. Run the ETL: `python -m reviewscope.etl_spark --raw data/raw/dataset.csv`.
-   Or upload the CSV to Databricks and run `databricks/etl_job.py`.
+   On Windows, run it in Docker to avoid Hadoop's winutils:
+   `docker build -f docker/etl.Dockerfile -t reviewscope-etl .`, then
+   `docker run --rm -m 7g -v "$PWD/data:/app/data" reviewscope-etl --raw data/raw/dataset.csv`.
+   Or upload `dataset.csv.gz` to a Unity Catalog volume and run `databricks/etl_job.py`.
 3. Train: `python -m reviewscope.train_lora --mode lora` and `--mode head`.
-   These default to DistilBERT and 200k training rows; a GPU helps.
+   These default to DistilBERT and 200k training rows; a GPU helps. The results
+   above used `--max-train 30000 --max-eval 10000`. On CPU that took 94 min for
+   LoRA and 42 min for head only.
 4. Run `python -m reviewscope.calibration` and `python -m reviewscope.export_onnx`.
-5. Build the index: `python -m reviewscope.build_index --limit 1000000`.
-   Above 100k vectors it switches to IVF-PQ.
+5. Build the index: `python -m reviewscope.build_index --limit 300000`.
+   Above 100k vectors it switches to IVF-PQ. On CPU, embedding 300k reviews took
+   about 1.8 hours.
 6. Ask a question with RAG:
    `BEDROCK_MODEL_ID=<id> python -m reviewscope.rag_bedrock --app-id 570 "How are the servers?"`
    Use `--dry-run` to see the prompt without calling AWS.
@@ -136,10 +158,13 @@ databricks/         the ETL as a Databricks notebook
 
 ## Limits
 
-- The synthetic set has 60 games, so the per-game calibration panel has only a few points.
-  The real set has thousands of games.
-- The Databricks notebook calls the same `run()` that CI tests, but it has not been run
-  on Databricks from this repo's CI.
-- CI checks the Bedrock prompt and citation checking, not a live Bedrock call.
+- Training used 30k of the 3.4M training reviews, for one epoch, on CPU. A GPU
+  run on the full split should widen the gap between LoRA and the head-only model.
+- The Databricks notebook was run once by hand on Databricks Free Edition. CI
+  does not run it.
+- No live Bedrock answers are shown yet. CI checks the prompt and the citation
+  checking with `--dry-run`, and the author's AWS account has not had Bedrock
+  model access enabled yet.
+- IVF-PQ recall@10 is 0.59 at the default settings (see Results).
 - Steam's "recommended" label measures recommendation, not sentiment. Sarcastic
   "10/10 would crash again" reviews are noise that no classifier should fit.
