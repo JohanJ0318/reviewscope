@@ -47,7 +47,8 @@ sample rather than the 3.4M available, for one epoch.
 | | always "recommended" | 82.5%, macro-F1 0.45 |
 | Calibration | ECE, LoRA / head only | 0.007 / 0.006 |
 | | per-game positive rate, mean abs error, LoRA / head | **0.046** / 0.060 |
-| ONNX parity | max abs logit diff vs PyTorch | 3e-6 |
+| ONNX parity | max abs logit diff vs PyTorch, Python ORT / C++ runner | 3e-6 / 3e-6 |
+| C++ runner (ORT 1.31, Linux container, 4 threads), batch 1, seq 128 | fp32 / int8 (p50) | 65.4 / **38.5 ms** |
 | ONNX latency, batch 1, seq 128 | PyTorch / ORT fp32 / ORT int8 (p50) | 72.5 / 61.1 / **36.7 ms** |
 | int8 quantisation | size, accuracy on 2k test reviews | 268 → **67 MB**, 91.3% → 90.6% |
 | FAISS, 300k reviews, MiniLM-L6 384-d | IVF-PQ vs raw float32: size, recall@10 (nprobe 16) | 461 → **21 MB**, 0.59 |
@@ -135,6 +136,9 @@ paths and the Hugging Face cache can exceed the 260-character path limit.
 7. Build the C++ runner: `cmake -S cpp -B cpp/build -DONNXRUNTIME_ROOT=<ort release>`,
    then `cmake --build cpp/build`. Run it with
    `cpp/build/reviewscope_infer artifacts/onnx/classifier.onnx artifacts/onnx/tokens.bin artifacts/onnx/expected.bin`.
+   It exits with status 2 if its logits differ from PyTorch's by more than 1e-3.
+   With no compiler on the host, the same steps run in a `debian:bookworm-slim`
+   container with `g++ cmake` installed, as in CI.
 
 ## Layout
 

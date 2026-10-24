@@ -164,7 +164,8 @@ def main() -> None:
     with torch.no_grad():
         ref = clf(fixture["input_ids"], fixture["attention_mask"]).numpy()
     onnx_logits = sess.run(None, feed)[0]
-    write_cpp_fixture(fixture, onnx_logits, onnx_dir)
+    # The C++ runner checks itself against PyTorch, not against Python ORT (which it would match trivially).
+    write_cpp_fixture(fixture, ref, onnx_dir)
 
     emb_sess = ort_session(onnx_dir / "embedder.onnx")
     with torch.no_grad():
