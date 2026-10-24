@@ -108,7 +108,7 @@ def main() -> None:
         running = 0.0
         for step, chunk in enumerate(batches(train, args.batch_size, shuffle=True, seed=args.seed + epoch), 1):
             enc = encode(tok, chunk["text"].tolist(), args.max_len)
-            loss = model(**enc, labels=torch.tensor(chunk["label"].values)).loss
+            loss = model(**enc, labels=torch.tensor(chunk["label"].values, dtype=torch.long)).loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()

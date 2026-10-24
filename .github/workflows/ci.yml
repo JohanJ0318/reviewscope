@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - uses: actions/setup-java@v4   # Spark tests need a JVM
+      - uses: actions/setup-java@v5   # Spark tests need a JVM
         with: {distribution: temurin, java-version: "17"}
       - run: pip install -e ".[etl,dev]" -r requirements-serve.txt
       - run: pytest -q -rs
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: {distribution: temurin, java-version: "17"}
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[etl,train,index,dev]" -r requirements-serve.txt
