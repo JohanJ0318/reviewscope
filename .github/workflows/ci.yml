@@ -12,8 +12,8 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - uses: actions/setup-java@v5   # Spark tests need a JVM
         with: {distribution: temurin, java-version: "17"}
@@ -24,8 +24,8 @@ jobs:
     needs: unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - uses: actions/setup-java@v5
         with: {distribution: temurin, java-version: "17"}
@@ -42,7 +42,7 @@ jobs:
             echo '### ONNX';       echo '```json'; cat artifacts/onnx_report.json; echo '```'
             echo '### Index';      echo '```json'; cat artifacts/index/info.json; echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pipeline
           path: |
@@ -55,8 +55,8 @@ jobs:
     needs: pipeline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: {name: pipeline, path: artifacts}
       - name: Fetch ONNX Runtime
         run: |
@@ -73,8 +73,8 @@ jobs:
     needs: pipeline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: {name: pipeline, path: artifacts}
       - run: docker build -t reviewscope:dev .
       - name: Image has no torch

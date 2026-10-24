@@ -8,7 +8,12 @@ that model's calibration with **matplotlib** reliability diagrams. It exports th
 model to **ONNX** and runs it from Python and from a **C++** runner. Reviews are
 searched with a **FAISS** vector index, and **Claude on Amazon Bedrock** answers
 questions about a game from cited review snippets. The torch-free API is deployed
-to **Kubernetes**, and CI proves every stage on each push.
+to **Kubernetes**.
+
+On each push, CI runs the Spark ETL, training, calibration, ONNX export, the C++
+runner's parity check, the index build and a kind deployment, all on synthetic
+data. It does not call Bedrock (the RAG step runs with `--dry-run`) or run the
+Databricks notebook; both need cloud accounts.
 
 The point of the project is that each tool is there because the data needs it.
 The section [Why each tool is here](#why-each-tool-is-here) says what each one
@@ -135,5 +140,6 @@ databricks/         the ETL as a Databricks notebook
   The real set has thousands of games.
 - The Databricks notebook calls the same `run()` that CI tests, but it has not been run
   on Databricks from this repo's CI.
+- CI checks the Bedrock prompt and citation checking, not a live Bedrock call.
 - Steam's "recommended" label measures recommendation, not sentiment. Sarcastic
   "10/10 would crash again" reviews are noise that no classifier should fit.
