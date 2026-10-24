@@ -44,6 +44,27 @@ def expected_calibration_error(probs: np.ndarray, labels: np.ndarray, n_bins: in
     return float((t.n * (t.mean_pred - t.actual).abs()).sum() / t.n.sum())
 
 
+def roc_auc(probs: np.ndarray, labels: np.ndarray) -> float:
+    """Probability a random positive outranks a random negative (Mann-Whitney U, ties averaged)."""
+    ranks = pd.Series(probs).rank().to_numpy()
+    pos = labels == 1
+    n_pos, n_neg = int(pos.sum()), int((~pos).sum())
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+    return float((ranks[pos].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def macro_f1(preds: np.ndarray, labels: np.ndarray) -> float:
+    """Unweighted mean of the F1 for each class, so the minority class counts equally."""
+    scores = []
+    for cls in (0, 1):
+        tp = int(((preds == cls) & (labels == cls)).sum())
+        fp = int(((preds == cls) & (labels != cls)).sum())
+        fn = int(((preds != cls) & (labels == cls)).sum())
+        scores.append(2 * tp / (2 * tp + fp + fn) if tp else 0.0)
+    return float(np.mean(scores))
+
+
 def _style(ax):
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -66,7 +87,8 @@ def plot(preds: dict[str, pd.DataFrame], out_png: Path, min_reviews: int = 30, m
         p, y = df.prob.to_numpy(), df.label.to_numpy()
         t = reliability_table(p, y)
         ece = expected_calibration_error(p, y)
-        summary[name] = {"ece": ece, "accuracy": float(((p > 0.5) == y).mean()), "n": len(df)}
+        summary[name] = {"ece": ece, "accuracy": float(((p > 0.5) == y).mean()), "roc_auc": roc_auc(p, y),
+                         "macro_f1": macro_f1(p > 0.5, y), "n": len(df)}
         # Sparse bins swing wildly; they still count in ECE, weighted by size, but are not drawn.
         shown = t[t.n >= min_bin]
         ax1.plot(shown.mean_pred, shown.actual, color=color, linewidth=2, marker="o", markersize=5,

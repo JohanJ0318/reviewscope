@@ -74,8 +74,11 @@ def app_stats(df: DataFrame) -> DataFrame:
 
 def run(spark: SparkSession, raw_path: str, out: str, min_chars: int = 20) -> dict:
     raw = read_raw(spark, raw_path)
-    reviews = assign_split(clean(raw, min_chars)).cache()
-    reviews.repartition("split").write.mode("overwrite").partitionBy("split").parquet(f"{out}/reviews")
+    assign_split(clean(raw, min_chars)).repartition("split").write.mode("overwrite") \
+        .partitionBy("split").parquet(f"{out}/reviews")
+    # Everything after the write reads the parquet back rather than caching: a re-read
+    # of columnar output is cheap, and Databricks serverless does not allow .cache().
+    reviews = spark.read.parquet(f"{out}/reviews")
     app_stats(reviews).write.mode("overwrite").parquet(f"{out}/apps")
 
     counts = {r["split"]: r["count"] for r in reviews.groupBy("split").count().collect()}
@@ -86,7 +89,6 @@ def run(spark: SparkSession, raw_path: str, out: str, min_chars: int = 20) -> di
         "apps_by_split": {r["split"]: r["count"] for r in reviews.select("app_id", "split").distinct().groupBy("split").count().collect()},
         "positive_rate": reviews.agg(F.avg("label")).first()[0],
     }
-    reviews.unpersist()
     return report
 
 

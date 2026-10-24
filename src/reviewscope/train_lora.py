@@ -21,7 +21,11 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
 
+from reviewscope.calibration import macro_f1, roc_auc
 from reviewscope.data import load_split
+
+
+DEFAULT_TARGETS = {"distilbert": ["q_lin", "v_lin"]}
 
 
 def encode(tok, texts: list[str], max_len: int):
@@ -55,6 +59,8 @@ def build_model(base: str, mode: str, r: int, alpha: int, targets: list[str] | N
         return model
     from peft import LoraConfig, TaskType, get_peft_model
 
+    # PEFT knows BERT's attention names but not DistilBERT's, which is the default base.
+    targets = targets or DEFAULT_TARGETS.get(model.config.model_type)
     cfg = LoraConfig(task_type=TaskType.SEQ_CLS, r=r, lora_alpha=alpha, lora_dropout=0.1, target_modules=targets)
     return get_peft_model(model, cfg)
 
@@ -140,6 +146,9 @@ def main() -> None:
         "test_rows": len(test),
         "test_accuracy": test_acc,
         "majority_baseline": majority,
+        # Steam reviews are ~80% positive, so accuracy flatters; these two do not.
+        "test_roc_auc": roc_auc(test_probs, test.label.values),
+        "test_macro_f1": macro_f1(test_probs > 0.5, test.label.values),
         "train_seconds": round(train_seconds, 1),
         "history": history,
         "lora": {"rank": args.rank, "alpha": args.alpha} if args.mode == "lora" else None,
