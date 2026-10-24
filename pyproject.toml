@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reviewscope"
+version = "0.1.0"
+description = "Steam review pipeline: Spark ETL, LoRA classifier, ONNX/C++ inference, FAISS search, Bedrock RAG."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "pandas",
+  "pyarrow",
+]
+
+[project.optional-dependencies]
+# Each stage pulls only what it needs, so the serving image never installs torch.
+etl = ["pyspark>=3.5"]
+train = ["torch", "transformers>=4.44", "peft>=0.12", "onnx", "onnxscript", "onnxruntime", "matplotlib"]
+index = ["faiss-cpu", "torch", "transformers>=4.44"]
+rag = ["boto3"]
+serve = ["fastapi", "uvicorn", "onnxruntime", "tokenizers", "faiss-cpu"]
+dev = ["pytest", "httpx"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

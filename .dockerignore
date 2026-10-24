@@ -1,0 +1,10 @@
+.git
+.github
+data
+cpp
+tests
+docs
+databricks
+artifacts/classifier_*
+artifacts/plots
+**/__pycache__

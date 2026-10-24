@@ -1,0 +1,11 @@
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+data/
+artifacts/
+cpp/build/
+cpp/onnxruntime*/
+spark-warehouse/
+metastore_db/
+derby.log

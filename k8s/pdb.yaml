@@ -1,0 +1,8 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: reviewscope-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: reviewscope-api}
